@@ -6,10 +6,6 @@ export default async function handler(req, res) {
   try {
     const { input } = req.body;
 
-    if (!input) {
-      return res.status(400).json({ error: "Input is required" });
-    }
-
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
@@ -20,6 +16,11 @@ export default async function handler(req, res) {
         model: "gpt-4.1-mini",
         temperature: 0.3,
         input: `
+Return ONLY valid JSON.
+No markdown.
+No code fences.
+No explanation.
+
 Extract:
 - genre (visual_art | engineering | writing)
 - core_word (one noun)
@@ -29,8 +30,6 @@ Extract:
 - complexity (0.0-1.0)
 - stability (0.0-1.0)
 
-Return JSON only. No explanations.
-
 User input:
 ${input}
 `
@@ -39,38 +38,23 @@ ${input}
 
     const data = await response.json();
 
-    const content = data.output?.[0]?.content?.[0]?.text;
+    const text = data.output?.[0]?.content?.[0]?.text;
 
-    if (!content) {
-      return res.status(500).json({
-        error: "No content returned from model",
-        raw: data
-      });
+    if (!text) {
+      return res.status(500).json({ error: "No model output", raw: data });
     }
 
-    // ```json や ``` を除去
-    const cleaned = content
-      .replace(/```json/g, "")
-      .replace(/```/g, "")
-      .trim();
+    // コードブロック除去（念のため）
+    const cleaned = text.replace(/```[\s\S]*?```/g, (match) => {
+      return match.replace(/```json|```/g, "").trim();
+    }).trim();
 
-    let parsed;
-
-    try {
-      parsed = JSON.parse(cleaned);
-    } catch (parseError) {
-      return res.status(500).json({
-        error: "JSON parse failed",
-        raw: content
-      });
-    }
-
-    return res.status(200).json(parsed);
+    return res.status(200).json(JSON.parse(cleaned));
 
   } catch (err) {
     return res.status(500).json({
       error: "Server error",
-      details: err.message
+      message: err.message
     });
   }
 }
