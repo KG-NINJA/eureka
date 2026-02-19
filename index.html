@@ -3,27 +3,162 @@
 <head>
 <meta charset="UTF-8">
 <title>Eureika</title>
+<style>
+body {
+  margin:0;
+  background:black;
+  color:#00ff66;
+  font-family:monospace;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  height:100vh;
+  flex-direction:column;
+}
+input {
+  background:black;
+  color:#00ff66;
+  border:1px solid #00ff66;
+  padding:12px;
+  width:320px;
+  text-align:center;
+}
+canvas {
+  display:none;
+}
+#closing {
+  margin-top:20px;
+  font-size:14px;
+  opacity:0.9;
+  text-align:center;
+  max-width:500px;
+}
+#share {
+  margin-top:15px;
+  display:none;
+}
+button {
+  background:black;
+  color:#00ff66;
+  border:1px solid #00ff66;
+  padding:8px 12px;
+  margin:4px;
+  cursor:pointer;
+}
+button:hover {
+  background:#002200;
+}
+#donate {
+  position:fixed;
+  bottom:10px;
+  right:15px;
+  font-size:10px;
+  opacity:0.3;
+}
+</style>
 </head>
-<body style="background:black;color:#00FF66;font-family:monospace;display:flex;justify-content:center;align-items:center;height:100vh;flex-direction:column;">
+<body>
 
 <h1>Eureika</h1>
-<input id="input" placeholder="What are you working on?" style="background:black;color:#00FF66;border:1px solid #00FF66;padding:10px;width:300px;" />
-<button onclick="send()">Analyze</button>
+<input id="input" placeholder="Press Enter" autofocus />
 
-<pre id="result"></pre>
+<canvas id="canvas" width="600" height="600"></canvas>
+
+<div id="closing"></div>
+
+<div id="share">
+  <button onclick="shareX()">Share</button>
+  <button onclick="copyLink()">Copy Link</button>
+</div>
+
+<a id="donate" href="https://buymeacoffee.com/kgninja" target="_blank">
+support
+</a>
 
 <script>
-async function send() {
-  const text = document.getElementById("input").value;
+const input = document.getElementById("input");
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+const closing = document.getElementById("closing");
+const shareDiv = document.getElementById("share");
+
+let closingText = "";
+
+input.addEventListener("keydown", async (e) => {
+  if (e.key === "Enter") {
+    start();
+  }
+});
+
+async function start() {
+  const text = input.value;
+  input.style.display="none";
+  canvas.style.display="block";
 
   const res = await fetch("/api/analyze", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ input: text })
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({input:text})
   });
 
   const data = await res.json();
-  document.getElementById("result").textContent = JSON.stringify(data, null, 2);
+  closingText = data.closing_line || "";
+  closing.innerText = closingText;
+
+  animate(data);
+
+  shareDiv.style.display="block";
+}
+
+function animate(params) {
+  let t = 0;
+  const tension = params.tension || 0.5;
+  const openness = params.openness || 0.5;
+  const complexity = params.complexity || 0.5;
+  const stability = params.stability || 0.5;
+
+  function draw() {
+    ctx.clearRect(0,0,600,600);
+    ctx.strokeStyle="#00ff66";
+    ctx.translate(300,300);
+
+    const lines = 20 + Math.floor(complexity*80);
+    const radius = 100 + openness*100;
+    const spike = 100*tension;
+
+    for (let i=0;i<lines;i++) {
+      const angle = (i/lines)*Math.PI*2;
+      const r = radius + Math.sin(t+angle)*spike;
+      const x = Math.cos(angle)*r;
+      const y = Math.sin(angle)*r;
+
+      ctx.beginPath();
+      ctx.moveTo(0,0);
+      ctx.lineTo(x,y);
+      ctx.stroke();
+    }
+
+    ctx.setTransform(1,0,0,1,0,0);
+    t += 0.02*(1-stability);
+
+    if (t < 8) {
+      requestAnimationFrame(draw);
+    }
+  }
+
+  draw();
+}
+
+function shareX() {
+  const text = encodeURIComponent(
+    closingText + "\n\nhttps://eureika.vercel.app/"
+  );
+  window.open(`https://twitter.com/intent/tweet?text=${text}`, "_blank");
+}
+
+function copyLink() {
+  navigator.clipboard.writeText("https://eureika.vercel.app/");
+  alert("Link copied");
 }
 </script>
 
